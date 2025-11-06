@@ -235,11 +235,7 @@ body {
 
     .timer-num { font-size: 1.0em; } /* Números más pequeños */
     .timer-unit { margin-right: 2px; }
-}
-
-
-
-.timer-values .timer-num:first-child {
+    .timer-values .timer-num:first-child {
     /* Le da un ancho mínimo de 3 caracteres. 
       Así, "61" ocupará el mismo espacio que "155" o "220".
     */
@@ -249,4 +245,8 @@ body {
       Esto hace que "61" se vea alineado con "155".
     */
     text-align: right;
-}
+}}
+
+
+
+
