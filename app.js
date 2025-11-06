@@ -175,8 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const outward = Math.max(2, mainParams.baseWidth * 0.02);
-        const x = pt.x + nx * outward;
-        const y = pt.y + ny * outward;
+        const x = pt.x; // <-- MODIFICADO
+        const y = pt.y; // <-- MODIFICADO
 
         return { x, y, rawX: pt.x, rawY: pt.y, tx, ty, nx, ny };
     }
@@ -229,21 +229,22 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.bezierCurveTo(rightCp1X, rightCp1Y, rightCp2X, rightCp2Y, rightBaseX, baseY);
         ctx.closePath();
         ctx.fill();
-
+            /*
         // trazo externo
         ctx.strokeStyle = colorAccent;
         ctx.lineWidth = Math.max(1.2, baseWidth * 0.05 * thicknessFactor);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(rightBaseX - baseWidth * 0.08, baseY - Math.max(2, height * 0.05));
+        ctx.moveTo(rightBaseX, baseY);
         ctx.bezierCurveTo(
             rightCp1X, rightCp1Y - Math.max(2, height * 0.03),
             rightCp2X, rightCp2Y - Math.max(2, height * 0.03),
             tipX, tipY
-        );
-        ctx.stroke();
-
+        );  
+        ctx.stroke();  */
+            // 
+            /*
         // brillo interior
         ctx.strokeStyle = colorHighlight;
         ctx.lineWidth = Math.max(1.0, baseWidth * 0.035 * (0.9 + 0.3 * thicknessProgress));
@@ -255,16 +256,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const hiCp1Y = leftCp1Y - Math.max(1, height * 0.04);
         const hiCp2X = leftCp2X + (halfBase * 0.1);
         const hiCp2Y = leftCp2Y - Math.max(2, height * 0.06);
-        ctx.moveTo(hiStartX, hiStartY);
+        ctx.moveTo(leftBaseX, baseY);
         ctx.bezierCurveTo(hiCp1X, hiCp1Y, hiCp2X, hiCp2Y, tipX, tipY);
         ctx.stroke();
-
-        // base
-        ctx.fillStyle = colorFill;
-        ctx.beginPath();
-        ctx.rect(centerX - halfBase * 0.6, baseY - 4, halfBase * 1.2, 8);
-        ctx.fill();
-
+            */ //
+  
         return { 
             tipX, tipY, height, bend, 
             leftBaseX, rightBaseX, baseY,
@@ -350,11 +346,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const W = container.clientWidth;
         const H = container.clientHeight;
         const centerX = W / 2;
-        const groundY = H;
+        const groundY = H + 2;
 
         // Parámetros rama principal
         const mainParams = {
-            baseWidth: Math.max(16, W * 0.07),
+            baseWidth: Math.max(16, H * 0.07), // <-- MODIFICADO: W -> H
             topHeight: Math.max(350, H * 0.95),
             rightBend: 1,
             leftBend: -25,
@@ -371,7 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
             { length: Math.round(125 * 1.75), baseBend: -35, baseThickness: 3.0 * 1.5, color: '#14b79b', startProgress: 0.30, heightProgress: 0.30, side: 'left', xOffset: -25 },
             // Derecha
             { length: Math.round(140 * 1.75), baseBend: 20, baseThickness: 3.2 * 1.5, color: '#14b79b', startProgress: 0.25, heightProgress: 0.25, side: 'right', xOffset: 12 },
-            { length: Math.round(110 * 1.75), baseBend: 80, baseThickness: 2.8 * 1.5, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'right', xOffset: 18 }
+            { length: Math.round(110 * 1.75), baseBend: 90, baseThickness: 2.8 * 1.5, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'right', xOffset: -10 }
         ];
 
         // Estado de anclaje
@@ -391,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 1. Limpiar y dibujar suelo
             ctx.clearRect(0, 0, W, H);
-            drawGround(W, groundY);
+ 
             
             // 2. Dibujar tallo principal animado
             mainBranchData = drawMainBranch(centerX, groundY, easedP, mainParams);
@@ -417,8 +413,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         );
                         
                         const xOff = branch.xOffset || 0;
-                        state.startX = startPoint.x + (startPoint.tx * xOff);
-                        state.startY = startPoint.y + (startPoint.ty * xOff);
+                        
+                        // LÓGICA CONDICIONAL CORREGIDA
+                        if (branch.side === 'right') {
+                            // Para ramas derechas, usar offset horizontal
+                            state.startX = startPoint.x + xOff;
+                            state.startY = startPoint.y;
+                        } else {
+                            // Para ramas izquierdas, usar la lógica original (tangente)
+                            state.startX = startPoint.x + (startPoint.tx * xOff);
+                            state.startY = startPoint.y + (startPoint.ty * xOff);
+                        }
+                        
                         state.started = true;
                     }
                     
@@ -434,16 +440,23 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Dibujo final para asegurar estado perfecto
                 ctx.clearRect(0, 0, W, H);
-                drawGround(W, groundY);
+
                 mainBranchData = drawMainBranch(centerX, groundY, 1, mainParams);
                 for (let i = 0; i < thinBranches.length; i++) {
                     const branch = thinBranches[i];
                     const state = thinState[i];
                     if (!state.started) { // Por si acaso la animación fue muy rápida
-                        const startPoint = getPointOnMainBranch(centerX, groundY, branch.heightProgress, branch.side, mainParams, mainBranchData.bend, mainBranchData.currentHeight);
+                        // ... (código de getPointOnMainBranch)
                         const xOff = branch.xOffset || 0;
-                        state.startX = startPoint.x + (startPoint.tx * xOff);
-                        state.startY = startPoint.y + (startPoint.ty * xOff);
+                        
+                        // LÓGICA CONDICIONAL CORREGIDA
+                        if (branch.side === 'right') {
+                            state.startX = startPoint.x + xOff;
+                            state.startY = startPoint.y;
+                        } else {
+                            state.startX = startPoint.x + (startPoint.tx * xOff);
+                            state.startY = startPoint.y + (startPoint.ty * xOff);
+                        }
                     }
                     drawThinBranch(state.startX, state.startY, 1, branch);
                 }
