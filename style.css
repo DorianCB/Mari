@@ -1,7 +1,17 @@
-/* style.css: layout y estilos básicos para la escena */
+/* style.css: layout y estilos */
+@font-face {
+  font-family: 'Love'; /* Puedes poner aquí tu fuente 'Love' si la tienes */
+  /* src: url('path/to/font/love-font.woff2'); */
+}
+
 :root{
     --bg: #f8efe8;
+    --card-bg: #ffffff;
     --ground-line: #111;
+    --timer-text: #5C4033; /* Un café oscuro, como en el video */
+    --timer-color: #d6336c; /* Un color que combina con los corazones */
+    --font-serif: Georgia, 'Times New Roman', Times, serif;
+    --font-script: 'Love', cursive; /* Usa la fuente 'Love' o un fallback */
 }
 
 /* Reset mínimo */
@@ -22,15 +32,20 @@ body {
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-family: Arial, sans-serif;
 }
 
-/* Contenedor central */
+/* Contenedor central (Ahora es la tarjeta) */
 #container {
     position: relative;
-    width: 85vw;
-    height: 90vh; /* espacio vertical amplio para la rama */
-    border-bottom: 2px solid var(--ground-line);
-    overflow: hidden;
+    width: 80vw;
+    height: 80vh; 
+    max-width: 1000px;
+    min-height: 500px;
+    border-radius: 15px;
+    background-color: var(--card-bg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    overflow: hidden; /* Oculta lo que se salga de la tarjeta */
 }
 
 /* Punto que cae (animación inicial) */
@@ -40,7 +55,8 @@ body {
     height: 12px;
     background-color: #000;
     border-radius: 50%;
-    left: 50%;
+    /* JS lo pondrá en 50% (desktop) o 50% (móvil) */
+    left: 50%; 
     top: 0;
     transform: translateX(-50%);
     animation: fall 2s ease-in forwards;
@@ -49,17 +65,188 @@ body {
 
 @keyframes fall {
     from { top: 0; }
-    to { top: calc(100% - 6px); }
+    /* *** ÚNICO CAMBIO AQUÍ *** */
+    /* Ajustado de -6px a -8px para que el centro del punto (6px)
+       aterrice en la línea del suelo (H - 2px) */
+    to { top: calc(100% - 8px); }
 }
 
-/* Canvas: ocupa todo el contenedor y queda pegado al piso */
+/* Canvas: ahora ocupa toda la tarjeta */
 #treeCanvas {
     position: absolute;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0; /* A la izquierda para que el translate() funcione */
     width: 100%;
     height: 100%;
     display: block;
     touch-action: none;
+    transform: none; /* Sin transform por defecto */
+}
+
+/* --- Estilos de Texto y Cronómetros --- */
+
+#timers-container {
+    position: absolute;
+    left: 4%;
+    top: 5%;
+    width: 45%; /* Ocupa la mitad izquierda */
+    height: 90%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Centrado verticalmente */
+    
+    /* Oculto por defecto */
+    opacity: 0;
+    transition: opacity 1.5s ease-in 0.5s;
+    z-index: 20;
+    user-select: none;
+    color: var(--timer-text);
+}
+
+/* Clase que el JS añadirá para mostrar los timers */
+#timers-container.timer-visible {
+    opacity: 1;
+}
+
+/* Estilo del Párrafo de amor */
+.love-note {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--timer-text);
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 20px;
+}
+.love-note .signature {
+    font-family: var(--font-script);
+    font-size: 24px;
+    text-align: right;
+    color: var(--timer-color);
+}
+
+/* Estilo de cada caja de cronómetro */
+.timer-box {
+    margin-bottom: 15px;
+    font-size: 14px; /* "Hablamos hace:" */
+    line-height: 1.4;
+    color: #666;
+}
+
+/* Títulos más grandes para los timers más importantes */
+#timer-love { font-size: 16px; }
+#timer-happy { font-size: 18px; }
+
+/* El span que contiene los valores del tiempo */
+.timer-values {
+    display: block;
+    margin-top: 5px;
+}
+
+/* Estilos para el formato del video */
+.timer-num {
+    font-family: var(--font-serif);
+    font-weight: bold;
+    font-size: 2em; /* 2x el tamaño de su padre (.timer-box) */
+    color: var(--timer-color);
+    display: inline-block;
+    vertical-align: baseline;
+}
+
+.timer-unit {
+    font-family: var(--font-serif);
+    font-size: 0.8em;
+    color: var(--timer-text);
+    margin-left: 2px;
+    margin-right: 8px;
+}
+
+
+/* --- *** MEDIA QUERY PARA MÓVIL VERTICAL *** --- */
+@media (max-width: 768px) and (orientation: portrait) {
+    #container {
+        width: 90vw;
+        height: 90vh;
+        display: flex;
+        flex-direction: column; /* Apila el texto encima del canvas */
+    }
+
+    #timers-container {
+        position: relative; /* Quita el absolute */
+        width: 90%;
+        left: 5%;
+        top: 3%;
+        text-align: left; /* Alineación normal */
+        justify-content: flex-start;
+        
+        height: 45%; /* Altura fija para el texto */
+        padding-bottom: 10px; 
+    }
+    
+    .love-note {
+        font-size: 14px;
+        margin-bottom: 10px;
+    }
+    .love-note .signature { font-size: 20px; }
+    
+    .timer-box { font-size: 12px; margin-bottom: 10px; }
+    #timer-love { font-size: 13px; }
+    #timer-happy { font-size: 14px; }
+    
+    .timer-num { font-size: 1.8em; }
+
+    #treeCanvas {
+        position: relative; /* Quita el absolute */
+        width: 100%;
+        
+        height: 55%; /* Altura fija para el canvas */
+        margin-top: 0; /* Quita el margen negativo */
+    }
+}
+
+/* --- *** MEDIA QUERY PARA MÓVIL HORIZONTAL *** --- */
+@media (max-width: 900px) and (orientation: landscape) {
+    /* Mantiene el layout de escritorio, pero reduce las fuentes */
+    
+    #container {
+        width: 95vw;
+        height: 90vh;
+    }
+
+    #timers-container {
+        left: 2%;
+        width: 50%; /* Más espacio para el texto */
+        top: 2%;
+    }
+
+    .love-note {
+        font-size: 12px; /* Texto más pequeño */
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+    }
+    .love-note .signature { font-size: 18px; }
+
+    .timer-box {
+        font-size: 11px;
+        margin-bottom: 8px;
+    }
+    #timer-love { font-size: 12px; }
+    #timer-happy { font-size: 13px; }
+
+    .timer-num { font-size: 1.0em; } /* Números más pequeños */
+    .timer-unit { margin-right: 2px; }
+}
+
+
+
+.timer-values .timer-num:first-child {
+    /* Le da un ancho mínimo de 3 caracteres. 
+      Así, "61" ocupará el mismo espacio que "155" o "220".
+    */
+    min-width: 3ch;
+    
+    /* Alinea el número a la derecha dentro de ese espacio.
+      Esto hace que "61" se vea alineado con "155".
+    */
+    text-align: right;
 }

@@ -1,4 +1,4 @@
-// app.js - MODIFICADO: Árbol y corazón más altos, llegando a la mitad de la pantalla.
+// app.js - CORREGIDO: Árbol en el suelo (vertical) y más pequeño (horizontal).
 document.addEventListener('DOMContentLoaded', () => {
     const fallingPoint = document.getElementById('falling-point');
     const treeCanvas = document.getElementById('treeCanvas');
@@ -9,18 +9,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const dpr = window.devicePixelRatio || 1;
         const cssW = container.clientWidth;
         const cssH = container.clientHeight;
-        treeCanvas.style.width = cssW + 'px';
-        treeCanvas.style.height = cssH + 'px';
-        treeCanvas.width = Math.round(cssW * dpr);
-        treeCanvas.height = Math.round(cssH * dpr);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        
+        const canvasRect = treeCanvas.getBoundingClientRect();
+        const canvasW = canvasRect.width;
+        const canvasH = canvasRect.height;
+        
+        treeCanvas.style.width = canvasW + 'px';
+        treeCanvas.style.height = canvasH + 'px';
+        treeCanvas.width = Math.round(canvasW * dpr);
+        treeCanvas.height = Math.round(canvasH * dpr);
+        
+        generateTree();
     }
-    resizeCanvas();
+    
     window.addEventListener('resize', resizeCanvas);
-
+    
     fallingPoint.addEventListener('animationend', () => {
         fallingPoint.style.display = 'none';
-        generateTree();
+        resizeCanvas(); 
     });
 
     // --- FUNCIONES PARA CORAZONES ---
@@ -50,7 +56,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- FIN DE FUNCIONES PARA CORAZONES ---
+    // --- Funciones para el Cronómetro (ACTUALIZADAS) ---
+
+    function formatNumber(num) {
+        return num < 10 ? '0' + num : num;
+    }
+
+    function calculateDuration(startDate) {
+        const now = new Date();
+        let diff = Math.floor((now - startDate) / 1000); 
+
+        if (diff < 0) diff = 0; 
+
+        const d = Math.floor(diff / (60 * 60 * 24));
+        diff -= d * (60 * 60 * 24);
+
+        const h = Math.floor(diff / (60 * 60));
+        diff -= h * (60 * 60);
+
+        const m = Math.floor(diff / 60);
+        diff -= m * 60;
+
+        const s = diff;
+
+        return { d, h, m, s };
+    }
+
+    let timerInterval = null; // Variable para guardar el intervalo
+    function startTimers() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+        }
+
+        const timersContainer = document.getElementById('timers-container');
+        const spanTalk = document.getElementById('time-talk');
+        const spanLove = document.getElementById('time-love');
+        const spanHappy = document.getElementById('time-happy');
+
+        const dateTalk = new Date('2025-03-31T00:00:00');
+        const dateLove = new Date('2025-06-04T00:00:00');
+        const dateHappy = new Date('2025-09-06T00:00:00');
+
+        timersContainer.classList.add('timer-visible');
+
+        function buildTimerHTML(time) {
+            return `
+                <span class="timer-num">${time.d}</span>
+                <span class="timer-unit">días</span>
+                <span class="timer-num">${formatNumber(time.h)}</span>
+                <span class="timer-unit">horas</span>
+                <span class="timer-num">${formatNumber(time.m)}</span>
+                <span class="timer-unit">minutos</span>
+                <span class="timer-num">${formatNumber(time.s)}</span>
+                <span class="timer-unit">segundos</span>
+            `;
+        }
+
+        function updateClocks() {
+            spanTalk.innerHTML = buildTimerHTML(calculateDuration(dateTalk));
+            spanLove.innerHTML = buildTimerHTML(calculateDuration(dateLove));
+            spanHappy.innerHTML = buildTimerHTML(calculateDuration(dateHappy));
+        }
+
+        updateClocks(); // Llamar una vez inmediatamente
+        timerInterval = setInterval(updateClocks, 1000); // Luego actualizar
+    }
+
+
+    // --- Funciones de Animación (easing, bend, etc.) ---
 
     function easeOutCubic(t) {
         return 1 - Math.pow(1 - t, 3);
@@ -273,62 +346,94 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- LÓGICA DE ANIMACIÓN (SEPARADA EN FASES) ---
+    
+    let animationFrameId = null;
+
     function generateTree() {
-        const W = container.clientWidth;
-        const H = container.clientHeight;
-        const centerX = W / 2;
-        const groundY = H + 2;
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        
+        document.getElementById('timers-container').classList.remove('timer-visible');
+
+        const dpr = window.devicePixelRatio || 1;
+        const W = treeCanvas.width / dpr;
+        const H = treeCanvas.height / dpr;
+        
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // *** LÓGICA DE LAYOUT ***
+        const isPortrait = container.clientHeight > container.clientWidth;
+        const isLandscapeMobile = (!isPortrait && container.clientWidth < 900); 
+        
+        let animationMode;
+        let centerX_growth; 
+        let targetOffsetX; 
+        let heightMultiplier; 
+
+        if (isPortrait) {
+            animationMode = 'portrait';
+            centerX_growth = W / 2; 
+            targetOffsetX = 0; 
+            heightMultiplier = 0.6; 
+            fallingPoint.style.left = '50%';
+        } else if (isLandscapeMobile) {
+            animationMode = 'desktop';
+            centerX_growth = W / 2; 
+            targetOffsetX = W * 0.30; 
+            heightMultiplier = 0.65;
+            fallingPoint.style.left = '50%';
+        } else {
+            animationMode = 'desktop';
+            centerX_growth = W / 2; 
+            targetOffsetX = W * 0.25; 
+            heightMultiplier = 0.8;
+            fallingPoint.style.left = '50%';
+        }
+        
+        // *** CAMBIO AQUÍ: Árbol "escondido" ***
+        // Se sube la línea del suelo 4px (en lugar de 2px)
+        const groundY = H - 4; 
         
         const smallestDim = Math.min(W, H); 
 
-        // Parámetros rama principal
         const mainParams = {
             baseWidth: Math.max(16, smallestDim * 0.08), 
-            // *** CAMBIO 1: topHeight más grande para que llegue más arriba ***
-            topHeight: Math.max(250, smallestDim * 0.8), // Ajustado de 0.75 a 1.0 (o incluso 1.1 si quieres que suba un poco más)
+            topHeight: Math.max(150, smallestDim * heightMultiplier), 
             rightBend: 1,
             leftBend: -25,
             endThicken: 2.5,
             colorFill: '#14b79b',
-            colorAccent: '#14b79b',
-            colorHighlight: '#14b79b'
         };
 
-        // Ramas delgadas (proporciones ajustadas ligeramente para el tronco más pequeño)
         const thinBranches = [
-            { length: Math.round(smallestDim * 0.2), baseBend: -65, baseThickness: 3.0, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'left', xOffset: -30 },
-            { length: Math.round(smallestDim * 0.18), baseBend: -35, baseThickness: 2.5, color: '#14b79b', startProgress: 0.30, heightProgress: 0.30, side: 'left', xOffset: -25 },
-            { length: Math.round(smallestDim * 0.19), baseBend: 20, baseThickness: 2.7, color: '#14b79b', startProgress: 0.25, heightProgress: 0.33, side: 'right', xOffset: -5 },
-            { length: Math.round(smallestDim * 0.17), baseBend: 40, baseThickness: 2.3, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'right', xOffset: -10 }
+            { length: Math.round(smallestDim * 0.2 * heightMultiplier), baseBend: -65, baseThickness: 3.0, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'left', xOffset: -30 },
+            { length: Math.round(smallestDim * 0.18 * heightMultiplier), baseBend: -35, baseThickness: 2.5, color: '#14b79b', startProgress: 0.30, heightProgress: 0.30, side: 'left', xOffset: -25 },
+            { length: Math.round(smallestDim * 0.19 * heightMultiplier), baseBend: 20, baseThickness: 2.7, color: '#14b79b', startProgress: 0.25, heightProgress: 0.33, side: 'right', xOffset: -5 },
+            { length: Math.round(smallestDim * 0.17 * heightMultiplier), baseBend: 40, baseThickness: 2.3, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'right', xOffset: -10 }
         ];
 
         const thinState = thinBranches.map(() => ({ started: false, startX: null, startY: null }));
         const treeSecondsDuration = 3.0;
         let treeStart = null;
-        let mainBranchData = null;
 
-        // --- VARIABLES PARA CORAZONES ---
+        let timersStarted = false;
+
         const hearts = [];
         const heartColors = ['#e63946', '#f4a261', '#e9c46a', '#f78cbf', '#f25287', '#ffccd5', '#ef476f', '#ffd166'];
         const maxHearts = 3000;
         const heartMinSize = 5;
         const heartMaxSize = 15;
 
-        // Calcular la posición y tamaño FINAL del corazón UNA SOLA VEZ
-        const finalBranchData = computeMainBranchShape(centerX, groundY, 1, mainParams);
+        const finalBranchData = computeMainBranchShape(centerX_growth, groundY, 1, mainParams);
         
         const hRadius = mainParams.topHeight * 0.5; 
-        const wRadius = W * 0.48; 
+        const wRadius = (W / 2) * 0.9; 
         const finalHeartRadius = Math.min(hRadius, wRadius); 
 
-        const finalHeartCenterX = centerX + finalBranchData.bend * 0.7 + 20;
-        
-        // *** CAMBIO 2: finalHeartCenterY ajustado para que suba con el tronco ***
-        // Restamos más para que suba (groundY - (la mitad de la altura total del árbol))
+        const finalHeartCenterX = centerX_growth + finalBranchData.bend * 0.7 + 20;
         const finalHeartCenterY = groundY - (mainParams.topHeight * 0.5) - (finalHeartRadius * 0.2); 
-        // Puedes jugar con el 0.2 o el 0.5 para moverlo un poco arriba o abajo de la mitad
 
-        // --- PRE-GENERAR LOS CORAZONES ---
         for (let i = 0; i < maxHearts; i++) {
             const targetPos = getRandomPointInHeart(finalHeartCenterX, finalHeartCenterY, finalHeartRadius);
             hearts.push({
@@ -339,7 +444,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 spawnTime: Math.random() * 0.8 
             });
         }
-
+        
+        // Dibuja la línea en la posición Y correcta
+        function drawGround() {
+            ctx.beginPath();
+            ctx.moveTo(0, groundY);
+            ctx.lineTo(W, groundY);
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 2; // La línea ocupa 2px (de H-4 a H-2)
+            ctx.stroke();
+        }
 
         // --- FASE 1: Animación del ÁRBOL ---
         function treeStep(ts) {
@@ -349,8 +463,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const easedP = easeOutCubic(rawP);
 
             ctx.clearRect(0, 0, W, H);
+            drawGround(); 
  
-            mainBranchData = drawMainBranch(centerX, groundY, easedP, mainParams);
+            drawMainBranch(centerX_growth, groundY, easedP, mainParams);
 
             for (let i = 0; i < thinBranches.length; i++) {
                 const branch = thinBranches[i];
@@ -358,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (rawP >= branch.startProgress) {
                     if (!state.started) {
-                        const startPoint = getPointOnMainBranch(centerX, groundY, branch.heightProgress, branch.side, mainParams);
+                        const startPoint = getPointOnMainBranch(centerX_growth, groundY, branch.heightProgress, branch.side, mainParams);
                         const xOff = branch.xOffset || 0;
                         if (branch.side === 'right') {
                             state.startX = startPoint.x + xOff;
@@ -374,12 +489,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (rawP < 1) {
-                requestAnimationFrame(treeStep);
+                animationFrameId = requestAnimationFrame(treeStep);
             } else {
-                requestAnimationFrame(heartStep);
+                animationFrameId = requestAnimationFrame(heartStep);
             }
         }
-
 
         // --- FASE 2: Animación de CORAZONES ---
         const heartSecondsDuration = 2.0; 
@@ -391,14 +505,12 @@ document.addEventListener('DOMContentLoaded', () => {
             let rawP = Math.min(1, elapsed / heartSecondsDuration); 
             
             ctx.clearRect(0, 0, W, H);
+            drawGround();
 
-            mainBranchData = drawMainBranch(centerX, groundY, 1, mainParams);
-            
+            drawMainBranch(centerX_growth, groundY, 1, mainParams);
             for (let i = 0; i < thinBranches.length; i++) {
-                const branch = thinBranches[i];
-                const state = thinState[i];
-                if (state.started) {
-                    drawThinBranch(state.startX, state.startY, 1, branch);
+                if (thinState[i].started) {
+                    drawThinBranch(thinState[i].startX, thinState[i].startY, 1, thinBranches[i]);
                 }
             }
 
@@ -406,7 +518,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const heartAge = rawP - heart.spawnTime; 
                 const growDuration = 0.6; 
                 const heartProgress = Math.min(1, Math.max(0, heartAge) / growDuration);
-                
                 if (heartProgress > 0) {
                     const currentSize = heart.size * easeOutCubic(heartProgress);
                     drawHeart(heart.x, heart.y, currentSize, heart.color);
@@ -414,22 +525,57 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (rawP < 1) {
-                requestAnimationFrame(heartStep);
+                animationFrameId = requestAnimationFrame(heartStep);
             } else {
-                ctx.clearRect(0, 0, W, H);
-                drawMainBranch(centerX, groundY, 1, mainParams); 
-                
-                for (let i = 0; i < thinBranches.length; i++) { 
-                    drawThinBranch(thinState[i].startX, thinState[i].startY, 1, thinBranches[i]);
+                if (animationMode === 'portrait') {
+                    if (!timersStarted) {
+                        timersStarted = true;
+                        startTimers(); 
+                    }
+                } else {
+                    animationFrameId = requestAnimationFrame(moveStep);
                 }
-
-                hearts.forEach(heart => { 
-                    drawHeart(heart.x, heart.y, heart.size, heart.color);
-                });
             }
         }
+        
+        // --- FASE 3: Animación de MOVIMIENTO (Solo Desktop/Horizontal) ---
+        const moveSecondsDuration = 1.5; 
+        let moveStart = null;
 
+        function moveStep(ts) {
+            if (!moveStart) moveStart = ts;
+            const elapsed = (ts - moveStart) / 1000;
+            let rawP = Math.min(1, elapsed / moveSecondsDuration);
+            const easedP = easeInOutCubic(rawP); 
+            const currentOffsetX = targetOffsetX * easedP;
+
+            ctx.clearRect(0, 0, W, H);
+            drawGround();
+            
+            ctx.save();
+            ctx.translate(currentOffsetX, 0);
+
+            drawMainBranch(centerX_growth, groundY, 1, mainParams); 
+            for (let i = 0; i < thinBranches.length; i++) { 
+                drawThinBranch(thinState[i].startX, thinState[i].startY, 1, thinBranches[i]);
+            }
+            hearts.forEach(heart => { 
+                drawHeart(heart.x, heart.y, heart.size, heart.color);
+            });
+
+            ctx.restore();
+
+            if (rawP < 1) {
+                animationFrameId = requestAnimationFrame(moveStep);
+            } else {
+                if (!timersStarted) {
+                    timersStarted = true;
+                    startTimers(); 
+                }
+            }
+        }
+        
         // --- INICIAR LA FASE 1 ---
-        requestAnimationFrame(treeStep);
+        animationFrameId = requestAnimationFrame(treeStep);
     }
 });
