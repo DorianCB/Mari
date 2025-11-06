@@ -1,4 +1,4 @@
-// app.js - CÓDIGO FINAL (Corazón más bajo y más a la derecha)
+// app.js - MODIFICADO: Árbol y corazón más altos, llegando a la mitad de la pantalla.
 document.addEventListener('DOMContentLoaded', () => {
     const fallingPoint = document.getElementById('falling-point');
     const treeCanvas = document.getElementById('treeCanvas');
@@ -25,32 +25,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FUNCIONES PARA CORAZONES ---
 
-    /**
-     * Dibuja un corazón centrado en (x, y).
-     */
     function drawHeart(x, y, size, color) {
         ctx.fillStyle = color;
         ctx.beginPath();
-        const s = size * 0.1; // Factor de escala
+        const s = size * 0.1; 
         ctx.moveTo(x, y - 3 * s);
         ctx.bezierCurveTo(x - 5 * s, y - 10 * s, x - 12 * s, y - 5 * s, x, y + 8 * s);
         ctx.bezierCurveTo(x + 12 * s, y - 5 * s, x + 5 * s, y - 10 * s, x, y - 3 * s);
         ctx.fill();
     }
 
-    /**
-     * Obtiene un punto aleatorio dentro de una forma de corazón (usando rejection sampling).
-     * AJUSTES CRÍTICOS PARA FORMA, POSICIÓN E INVERSIÓN.
-     */
     function getRandomPointInHeart(cx, cy, radius) {
         while (true) {
-            const x = (Math.random() - 0.5) * 2.8 * radius; 
+            const x = (Math.random() - 0.5) * 2.2 * radius; 
             const y = (Math.random() - 0.5) * 2.5 * radius; 
 
-            // Ecuación matemática de un corazón (AFINADA e INVERTIDA)
             const nx = x / radius * 1.2; 
             const ny = -(y / radius) * 1.5 + 0.3; 
-
             const check = Math.pow(nx, 2) + Math.pow(ny - Math.sqrt(Math.abs(nx)), 2);
 
             if (check <= 1.0) { 
@@ -61,8 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FIN DE FUNCIONES PARA CORAZONES ---
 
-
-    // funciones de easing (suavizado)
     function easeOutCubic(t) {
         return 1 - Math.pow(1 - t, 3);
     }
@@ -70,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
 
-    // computeCompositeBend para rama principal
     function computeCompositeBend(p, rightBend, leftBend, hookStrength = 0.8, hookStart = 0.7) {
         const s = easeInOutCubic(p);
         let base = rightBend * (1 - s) + leftBend * s;
@@ -84,13 +72,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return base;
     }
 
-    // computeBendSecondary para ramas delgadas (curva más simple)
     function computeBendSecondary(p, baseBend, variation) {
         let bend = baseBend;
         return bend;
     }
 
-    // Evaluador cúbico Bezier
     function cubicPoint(t, p0, p1, p2, p3) {
         const u = 1 - t;
         const tt = t * t;
@@ -102,7 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x, y };
     }
 
-    // Derivada de la cúbica Bezier
     function cubicDerivative(t, p0, p1, p2, p3) {
         const u = 1 - t;
         const ax = 3 * (u * u * (p1.x - p0.x) + 2 * u * t * (p2.x - p1.x) + t * t * (p3.x - p2.x));
@@ -110,7 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x: ax, y: ay };
     }
 
-    // computeMainBranchShape - Lógica de forma original
     function computeMainBranchShape(centerX, groundY, p, params) {
         const {
             baseWidth,
@@ -206,14 +190,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x, y, rawX: pt.x, rawY: pt.y, tx, ty, nx, ny };
     }
 
-    // Rama principal (gruesa) - Lógica de forma original
     function drawMainBranch(centerX, groundY, p, params) {
         const { colorFill } = params;
-            
-        // Esta función ahora usa computeMainBranchShape para obtener los datos
         const data = computeMainBranchShape(centerX, groundY, p, params);
 
-        // forma rellena
         ctx.fillStyle = colorFill;
         ctx.beginPath();
         ctx.moveTo(data.leftBaseX, data.baseY);
@@ -229,7 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // Rama delgada secundaria con taper (de gruesa a delgada)
     function drawThinBranch(startX, startY, p, params) {
         const {
             length,
@@ -293,17 +272,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return { endX, endY };
     }
 
-    // --- LÓGICA DE ANIMACIÓN ---
+    // --- LÓGICA DE ANIMACIÓN (SEPARADA EN FASES) ---
     function generateTree() {
         const W = container.clientWidth;
         const H = container.clientHeight;
         const centerX = W / 2;
         const groundY = H + 2;
+        
+        const smallestDim = Math.min(W, H); 
 
         // Parámetros rama principal
         const mainParams = {
-            baseWidth: Math.max(16, H * 0.07),
-            topHeight: Math.max(350, H * 0.95),
+            baseWidth: Math.max(16, smallestDim * 0.08), 
+            // *** CAMBIO 1: topHeight más grande para que llegue más arriba ***
+            topHeight: Math.max(250, smallestDim * 0.8), // Ajustado de 0.75 a 1.0 (o incluso 1.1 si quieres que suba un poco más)
             rightBend: 1,
             leftBend: -25,
             endThicken: 2.5,
@@ -312,51 +294,64 @@ document.addEventListener('DOMContentLoaded', () => {
             colorHighlight: '#14b79b'
         };
 
-        // Array de ramas delgadas (AHORA DESCOMENTADAS)
+        // Ramas delgadas (proporciones ajustadas ligeramente para el tronco más pequeño)
         const thinBranches = [
-            { length: Math.round(150 * 1.75), baseBend: -45, baseThickness: 3.5 * 1.5, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'left', xOffset: -30 },
-            { length: Math.round(125 * 1.75), baseBend: -35, baseThickness: 3.0 * 1.5, color: '#14b79b', startProgress: 0.30, heightProgress: 0.30, side: 'left', xOffset: -25 },
-            { length: Math.round(120 * 1.75), baseBend: 20, baseThickness: 3.2 * 1.5, color: '#14b79b', startProgress: 0.25, heightProgress: 0.33, side: 'right', xOffset: -5 },
-            { length: Math.round(110 * 1.75), baseBend: 40, baseThickness: 2.8 * 1.5, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'right', xOffset: -10 }
+            { length: Math.round(smallestDim * 0.2), baseBend: -65, baseThickness: 3.0, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'left', xOffset: -30 },
+            { length: Math.round(smallestDim * 0.18), baseBend: -35, baseThickness: 2.5, color: '#14b79b', startProgress: 0.30, heightProgress: 0.30, side: 'left', xOffset: -25 },
+            { length: Math.round(smallestDim * 0.19), baseBend: 20, baseThickness: 2.7, color: '#14b79b', startProgress: 0.25, heightProgress: 0.33, side: 'right', xOffset: -5 },
+            { length: Math.round(smallestDim * 0.17), baseBend: 40, baseThickness: 2.3, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'right', xOffset: -10 }
         ];
 
-        // Estado de anclaje
         const thinState = thinBranches.map(() => ({ started: false, startX: null, startY: null }));
-
-        // Variables de animación
-        const secondsDuration = 3.0;
-        let start = null;
+        const treeSecondsDuration = 3.0;
+        let treeStart = null;
         let mainBranchData = null;
 
         // --- VARIABLES PARA CORAZONES ---
         const hearts = [];
         const heartColors = ['#e63946', '#f4a261', '#e9c46a', '#f78cbf', '#f25287', '#ffccd5', '#ef476f', '#ffd166'];
-        const heartGenerationStart = 0.1;
-        const maxHearts = 1500;
+        const maxHearts = 3000;
         const heartMinSize = 5;
         const heartMaxSize = 15;
 
         // Calcular la posición y tamaño FINAL del corazón UNA SOLA VEZ
         const finalBranchData = computeMainBranchShape(centerX, groundY, 1, mainParams);
         
-        const finalHeartRadius = mainParams.topHeight * 0.45; 
-        // AJUSTADO para mover MÁS a la derecha
-        const finalHeartCenterX = centerX + finalBranchData.bend * 0.7 + 20; // Ajustado de +10 a +20
-        // AJUSTADO para BAJAR MÁS el corazón
-        const finalHeartCenterY = finalBranchData.tipY + finalHeartRadius * 0.7; // Ajustado de +0.55 a +0.7
+        const hRadius = mainParams.topHeight * 0.5; 
+        const wRadius = W * 0.48; 
+        const finalHeartRadius = Math.min(hRadius, wRadius); 
 
-        // Función de animación
-        function step(ts) {
-            if (!start) start = ts;
-            const elapsed = (ts - start) / 1000;
-            let rawP = Math.min(1, elapsed / secondsDuration);
+        const finalHeartCenterX = centerX + finalBranchData.bend * 0.7 + 20;
+        
+        // *** CAMBIO 2: finalHeartCenterY ajustado para que suba con el tronco ***
+        // Restamos más para que suba (groundY - (la mitad de la altura total del árbol))
+        const finalHeartCenterY = groundY - (mainParams.topHeight * 0.5) - (finalHeartRadius * 0.2); 
+        // Puedes jugar con el 0.2 o el 0.5 para moverlo un poco arriba o abajo de la mitad
+
+        // --- PRE-GENERAR LOS CORAZONES ---
+        for (let i = 0; i < maxHearts; i++) {
+            const targetPos = getRandomPointInHeart(finalHeartCenterX, finalHeartCenterY, finalHeartRadius);
+            hearts.push({
+                x: targetPos.x,
+                y: targetPos.y,
+                size: heartMinSize + Math.random() * (heartMaxSize - heartMinSize),
+                color: heartColors[Math.floor(Math.random() * heartColors.length)],
+                spawnTime: Math.random() * 0.8 
+            });
+        }
+
+
+        // --- FASE 1: Animación del ÁRBOL ---
+        function treeStep(ts) {
+            if (!treeStart) treeStart = ts;
+            const elapsed = (ts - treeStart) / 1000;
+            let rawP = Math.min(1, elapsed / treeSecondsDuration);
             const easedP = easeOutCubic(rawP);
 
             ctx.clearRect(0, 0, W, H);
  
             mainBranchData = drawMainBranch(centerX, groundY, easedP, mainParams);
 
-            // RAMAS DELGADAS AHORA VISIBLES
             for (let i = 0; i < thinBranches.length; i++) {
                 const branch = thinBranches[i];
                 const state = thinState[i];
@@ -378,75 +373,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // --- Lógica de generación y movimiento de CORAZONES ---
+            if (rawP < 1) {
+                requestAnimationFrame(treeStep);
+            } else {
+                requestAnimationFrame(heartStep);
+            }
+        }
+
+
+        // --- FASE 2: Animación de CORAZONES ---
+        const heartSecondsDuration = 2.0; 
+        let heartStart = null;
+
+        function heartStep(ts) {
+            if (!heartStart) heartStart = ts;
+            const elapsed = (ts - heartStart) / 1000;
+            let rawP = Math.min(1, elapsed / heartSecondsDuration); 
             
-            if (rawP >= heartGenerationStart && hearts.length < maxHearts) {
-                const heartsToGenerate = 100; // Generar 100 por frame
-                for (let i = 0; i < heartsToGenerate && hearts.length < maxHearts; i++) {
-                    const targetPos = getRandomPointInHeart(finalHeartCenterX, finalHeartCenterY, finalHeartRadius);
-                    
-                    hearts.push({
-                        x: targetPos.x,
-                        y: targetPos.y,
-                        size: heartMinSize + Math.random() * (heartMaxSize - heartMinSize),
-                        color: heartColors[Math.floor(Math.random() * heartColors.length)],
-                        spawnTime: rawP + (Math.random() * 0.1)
-                    });
+            ctx.clearRect(0, 0, W, H);
+
+            mainBranchData = drawMainBranch(centerX, groundY, 1, mainParams);
+            
+            for (let i = 0; i < thinBranches.length; i++) {
+                const branch = thinBranches[i];
+                const state = thinState[i];
+                if (state.started) {
+                    drawThinBranch(state.startX, state.startY, 1, branch);
                 }
             }
 
-            // Animar y dibujar corazones
             hearts.forEach(heart => {
-                const heartAge = rawP - heart.spawnTime;
-                const growDuration = 0.5;
-                const heartProgress = Math.min(1, heartAge / growDuration);
+                const heartAge = rawP - heart.spawnTime; 
+                const growDuration = 0.6; 
+                const heartProgress = Math.min(1, Math.max(0, heartAge) / growDuration);
                 
-                const currentSize = heart.size * easeOutCubic(heartProgress);
-
-                drawHeart(heart.x, heart.y, currentSize, heart.color);
+                if (heartProgress > 0) {
+                    const currentSize = heart.size * easeOutCubic(heartProgress);
+                    drawHeart(heart.x, heart.y, currentSize, heart.color);
+                }
             });
 
-            // --- FIN LÓGICA DE CORAZONES ---
-
             if (rawP < 1) {
-                requestAnimationFrame(step);
+                requestAnimationFrame(heartStep);
             } else {
-                // Dibujo final para asegurar estado perfecto
                 ctx.clearRect(0, 0, W, H);
-
-                mainBranchData = drawMainBranch(centerX, groundY, 1, mainParams);
+                drawMainBranch(centerX, groundY, 1, mainParams); 
                 
-                // RAMAS DELGADAS VISIBLES EN EL ESTADO FINAL
-                for (let i = 0; i < thinBranches.length; i++) {
-                    const branch = thinBranches[i];
-                    const state = thinState[i];
-                    if (!state.started) {
-                        const startPoint = getPointOnMainBranch(centerX, groundY, branch.heightProgress, branch.side, mainParams);
-                        const xOff = branch.xOffset || 0;
-                        if (branch.side === 'right') {
-                            state.startX = startPoint.x + xOff;
-                            state.startY = startPoint.y;
-                        } else {
-                            state.startX = startPoint.x + (startPoint.tx * xOff);
-                            state.startY = startPoint.y + (startPoint.ty * xOff);
-                        }
-                    }
-                    drawThinBranch(state.startX, state.startY, 1, branch);
+                for (let i = 0; i < thinBranches.length; i++) { 
+                    drawThinBranch(thinState[i].startX, thinState[i].startY, 1, thinBranches[i]);
                 }
 
-                // --- DIBUJO FINAL DE CORAZONES ---
-                hearts.forEach(heart => {
-                    if (!heart.x) { // Fallback por si acaso
-                        const targetPos = getRandomPointInHeart(finalHeartCenterX, finalHeartCenterY, finalHeartRadius);
-                        heart.x = targetPos.x;
-                        heart.y = targetPos.y;
-                        heart.size = heartMinSize + Math.random() * (heartMaxSize - heartMinSize);
-                    }
+                hearts.forEach(heart => { 
                     drawHeart(heart.x, heart.y, heart.size, heart.color);
                 });
             }
         }
 
-        requestAnimationFrame(step);
+        // --- INICIAR LA FASE 1 ---
+        requestAnimationFrame(treeStep);
     }
 });
