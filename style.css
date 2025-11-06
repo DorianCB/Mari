@@ -27,8 +27,8 @@ body {
 /* Contenedor central */
 #container {
     position: relative;
-    width: 80vw;
-    height: 88vh; /* espacio vertical amplio para la rama */
+    width: 85vw;
+    height: 90vh; /* espacio vertical amplio para la rama */
     border-bottom: 2px solid var(--ground-line);
     overflow: hidden;
 }
@@ -36,8 +36,8 @@ body {
 /* Punto que cae (animación inicial) */
 #falling-point {
     position: absolute;
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     background-color: #000;
     border-radius: 50%;
     left: 50%;
@@ -49,7 +49,7 @@ body {
 
 @keyframes fall {
     from { top: 0; }
-    to { top: calc(100% - 5px); }
+    to { top: calc(100% - 6px); }
 }
 
 /* Canvas: ocupa todo el contenedor y queda pegado al piso */

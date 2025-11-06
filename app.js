@@ -1,4 +1,4 @@
-// app.js - curva suave sin golpe a la derecha y gancho/garfio hacia la izquierda
+// app.js - Lógica CONCURRENTE CORREGIDA
 document.addEventListener('DOMContentLoaded', () => {
     const fallingPoint = document.getElementById('falling-point');
     const treeCanvas = document.getElementById('treeCanvas');
@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fallingPoint.addEventListener('animationend', () => {
         fallingPoint.style.display = 'none';
-        generateSingleBranch();
+        generateTree();
     });
 
     // línea del suelo
@@ -41,90 +41,185 @@ document.addEventListener('DOMContentLoaded', () => {
         return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
 
-    // computeCompositeBend: SUAVE inicio (muy poca curva a la derecha),
-    // luego transición continua a la izquierda, y al final añade un "garfio" (hook)
-    // que provoca un giro notable a la izquierda (sin golpe brusco).
-    function computeCompositeBend(p, rightBend, leftBend, hookStrength = 0.45, hookStart = 0.65) {
-        // p asumido suavizado (0..1)
-        // interpolación base entre rightBend pequeño y leftBend con suavizado continuo
+    // computeCompositeBend para rama principal
+    function computeCompositeBend(p, rightBend, leftBend, hookStrength = 0.8, hookStart = 0.7) {
         const s = easeInOutCubic(p);
         let base = rightBend * (1 - s) + leftBend * s;
 
-        // añadir efecto de gancho cerca de la punta (después de hookStart)
         if (p > hookStart) {
-            const t = (p - hookStart) / (1 - hookStart); // 0..1 across hook region
-            // usar curva acelerada para que el gancho aparezca rápido pero suavemente
-            const hookFactor = Math.pow(t, 1.6);
-            // el gancho empuja más hacia la izquierda (negativo)
+            const t = (p - hookStart) / (1 - hookStart);
+            const hookFactor = Math.pow(t, 1.8);
             base += -Math.abs(leftBend) * hookStrength * hookFactor;
         }
 
         return base;
     }
 
-    // Dibuja una sola hoja/rama rellena curva usando Beziers cúbicos y un brillo interior.
-    function drawSingleBranch(centerX, groundY, p, params) {
+    // computeBendSecondary para ramas delgadas (curva más simple)
+    // CORREGIDO: Devuelve la inclinación base fija, sin animarla.
+    function computeBendSecondary(p, baseBend, variation) {
+        let bend = baseBend;
+        return bend;
+    }
+
+    // Función para calcular punto en el borde de la rama principal
+    // Evaluador cúbico Bezier
+    function cubicPoint(t, p0, p1, p2, p3) {
+        const u = 1 - t;
+        const tt = t * t;
+        const uu = u * u;
+        const uuu = uu * u;
+        const ttt = tt * t;
+        const x = uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x;
+        const y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y;
+        return { x, y };
+    }
+
+    // Derivada de la cúbica Bezier
+    function cubicDerivative(t, p0, p1, p2, p3) {
+        const u = 1 - t;
+        const ax = 3 * (u * u * (p1.x - p0.x) + 2 * u * t * (p2.x - p1.x) + t * t * (p3.x - p2.x));
+        const ay = 3 * (u * u * (p1.y - p0.y) + 2 * u * t * (p2.y - p1.y) + t * t * (p3.y - p2.y));
+        return { x: ax, y: ay };
+    }
+
+    // computeMainBranchShape
+    function computeMainBranchShape(centerX, groundY, p, params) {
         const {
             baseWidth,
             topHeight,
             rightBend,
             leftBend,
-            endThicken,
-            colorFill,
-            colorAccent,
-            colorHighlight
+            endThicken
         } = params;
 
-        // progreso visual suavizado para la forma
         const pe = easeOutCubic(p);
 
-        // calcular rampa de grosor: solo aplica en la mitad superior (pe>0.5)
         let thicknessProgress = 0;
         if (pe > 0.5) {
-            thicknessProgress = (pe - 0.5) / 0.5; // 0..1 across second half
+            thicknessProgress = (pe - 0.5) / 0.5;
             thicknessProgress = easeOutCubic(thicknessProgress);
         }
-        const thicknessFactor = 1 + (endThicken - 1) * thicknessProgress; // 1..endThicken
+        const thicknessFactor = 1 + (endThicken - 1) * thicknessProgress;
 
-        // altura y base
         const height = topHeight * pe;
-        // aumentar la influencia de thicknessFactor para que la parte superior/punta se mantenga mucho más gruesa
-        const halfBase = (baseWidth * (1 + (thicknessFactor - 1) * 0.6)) / 2;
-        // const halfBase = (baseWidth * (1 + (thicknessFactor - 1) * 0.05)) / 2; // slight base adjustment when thickening
+        const halfBase = (baseWidth * (1 + (thicknessFactor - 1) * 0.8)) / 2;
 
         const leftBaseX = centerX - halfBase;
         const rightBaseX = centerX + halfBase;
         const baseY = groundY;
 
-        // calcular curvatura compuesta (suave + gancho)
-        const bend = computeCompositeBend(pe, rightBend, leftBend, 1, 1); // stronger hookStrength, earlier hookStart
+        const bend = computeCompositeBend(pe, rightBend, leftBend);
 
-        // efecto de caída (sag) después del 50% para enfatizar apariencia cayéndose hacia la izquierda (sutil)
         const sagStart = 0.5;
         let sagFactor = 0;
         if (pe > sagStart) {
             const raw = (pe - sagStart) / (1 - sagStart);
             sagFactor = Math.pow(raw, 0.8);
         }
-        const sagY = topHeight * 0.06 * sagFactor;
-        const sagX = -Math.abs(bend) * 0.35 * sagFactor; // a bit stronger lateral drop
+        const sagY = topHeight * 0.08 * sagFactor;
+        const sagX = -Math.abs(bend) * 0.5 * sagFactor;
 
-        // coordenadas de la punta (aplicar curvatura y caída)
         const tipX = centerX + bend * pe + sagX;
         const tipY = baseY - height + sagY;
 
         // puntos de control
-        const leftCp1X = leftBaseX + halfBase * 0.10 + bend * 0.02;
-        const leftCp1Y = baseY - height * 0.06 + sagY * 0.12;
+        const leftCp1X = leftBaseX + halfBase * 0.15 + bend * 0.05;
+        const leftCp1Y = baseY - height * 0.08 + sagY * 0.1;
+        const leftCp2X = centerX - halfBase * 0.25 + bend * 0.15 + (halfBase * 0.15) * (thicknessFactor - 1);
+        const leftCp2Y = baseY - height * 0.5 + sagY * 0.4;
+        const rightCp1X = centerX + halfBase * 0.25 + bend * 0.05 + sagX * 0.05 + (halfBase * 0.08) * (thicknessFactor - 1);
+        const rightCp1Y = baseY - height * 0.48 + sagY * 0.3;
+        const rightCp2X = rightBaseX - halfBase * 0.15 + bend * 0.02;
+        const rightCp2Y = baseY - height * 0.1 + sagY * 0.05;
 
-        const leftCp2X = centerX - halfBase * 0.18 + bend * 0.12 + (halfBase * 0.18) * (thicknessFactor - 1);
-        const leftCp2Y = baseY - height * 0.46 + sagY * 0.42;
+        return {
+            pe, height, halfBase, leftBaseX, rightBaseX, baseY, bend, tipX, tipY,
+            leftCp1X, leftCp1Y, leftCp2X, leftCp2Y, rightCp1X, rightCp1Y, rightCp2X, rightCp2Y,
+            thicknessFactor
+        };
+    }
 
-        const rightCp1X = centerX + halfBase * 0.20 + bend * 0.03 + sagX * 0.03 + (halfBase * 0.06) * (thicknessFactor - 1);
-        const rightCp1Y = baseY - height * 0.44 + sagY * 0.28;
+    function getPointOnMainBranch(centerX, groundY, heightProgress, side, mainParams, bend, totalHeight) {
+        const data = computeMainBranchShape(centerX, groundY, heightProgress, mainParams);
+        const t = data.pe; 
 
-        const rightCp2X = rightBaseX - halfBase * 0.10 + bend * 0.01;
-        const rightCp2Y = baseY - height * 0.08 + sagY * 0.06;
+        const leftP0 = { x: data.leftBaseX, y: data.baseY };
+        const leftP1 = { x: data.leftCp1X, y: data.leftCp1Y };
+        const leftP2 = { x: data.leftCp2X, y: data.leftCp2Y };
+        const leftP3 = { x: data.tipX, y: data.tipY };
+
+        const rightP0 = { x: data.rightBaseX, y: data.baseY };
+        const rightP1 = { x: data.rightCp2X, y: data.rightCp2Y };
+        const rightP2 = { x: data.rightCp1X, y: data.rightCp1Y };
+        const rightP3 = { x: data.tipX, y: data.tipY };
+
+        let pt, deriv;
+        if (side === 'left') {
+            pt = cubicPoint(t, leftP0, leftP1, leftP2, leftP3);
+            deriv = cubicDerivative(t, leftP0, leftP1, leftP2, leftP3);
+        } else {
+            pt = cubicPoint(t, rightP0, rightP1, rightP2, rightP3);
+            deriv = cubicDerivative(t, rightP0, rightP1, rightP2, rightP3);
+        }
+
+        const dtLen = Math.hypot(deriv.x, deriv.y) || 1;
+        const tx = deriv.x / dtLen;
+        const ty = deriv.y / dtLen;
+        let nx = -ty;
+        let ny = tx;
+
+        const dirFromCenter = pt.x - centerX;
+        if ((side === 'left' && nx > 0) || (side === 'right' && nx < 0)) {
+            nx = -nx; ny = -ny;
+        }
+
+        const outward = Math.max(2, mainParams.baseWidth * 0.02);
+        const x = pt.x + nx * outward;
+        const y = pt.y + ny * outward;
+
+        return { x, y, rawX: pt.x, rawY: pt.y, tx, ty, nx, ny };
+    }
+
+    // Rama principal (gruesa)
+    function drawMainBranch(centerX, groundY, p, params) {
+        const {
+            baseWidth, topHeight, rightBend, leftBend, endThicken,
+            colorFill, colorAccent, colorHighlight
+        } = params;
+
+        const pe = easeOutCubic(p);
+
+        let thicknessProgress = 0;
+        if (pe > 0.5) {
+            thicknessProgress = (pe - 0.5) / 0.5;
+            thicknessProgress = easeOutCubic(thicknessProgress);
+        }
+        const thicknessFactor = 1 + (endThicken - 1) * thicknessProgress;
+        const height = topHeight * pe;
+        const halfBase = (baseWidth * (1 + (thicknessFactor - 1) * 0.8)) / 2;
+        const leftBaseX = centerX - halfBase;
+        const rightBaseX = centerX + halfBase;
+        const baseY = groundY;
+        const bend = computeCompositeBend(pe, rightBend, leftBend);
+        const sagStart = 0.5;
+        let sagFactor = 0;
+        if (pe > sagStart) {
+            const raw = (pe - sagStart) / (1 - sagStart);
+            sagFactor = Math.pow(raw, 0.8);
+        }
+        const sagY = topHeight * 0.08 * sagFactor;
+        const sagX = -Math.abs(bend) * 0.5 * sagFactor;
+        const tipX = centerX + bend * pe + sagX;
+        const tipY = baseY - height + sagY;
+        const leftCp1X = leftBaseX + halfBase * 0.15 + bend * 0.05;
+        const leftCp1Y = baseY - height * 0.08 + sagY * 0.1;
+        const leftCp2X = centerX - halfBase * 0.25 + bend * 0.15 + (halfBase * 0.15) * (thicknessFactor - 1);
+        const leftCp2Y = baseY - height * 0.5 + sagY * 0.4;
+        const rightCp1X = centerX + halfBase * 0.25 + bend * 0.05 + sagX * 0.05 + (halfBase * 0.08) * (thicknessFactor - 1);
+        const rightCp1Y = baseY - height * 0.48 + sagY * 0.3;
+        const rightCp2X = rightBaseX - halfBase * 0.15 + bend * 0.02;
+        const rightCp2Y = baseY - height * 0.1 + sagY * 0.05;
 
         // forma rellena
         ctx.fillStyle = colorFill;
@@ -135,108 +230,227 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.closePath();
         ctx.fill();
 
-        // trazo externo de acento (borde externo derecho) - ancho de línea escala con thicknessFactor
+        // trazo externo
         ctx.strokeStyle = colorAccent;
-        ctx.lineWidth = Math.max(1.0, baseWidth * 0.045 * thicknessFactor);
+        ctx.lineWidth = Math.max(1.2, baseWidth * 0.05 * thicknessFactor);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(rightBaseX - baseWidth * 0.06, baseY - Math.max(2, height * 0.04));
+        ctx.moveTo(rightBaseX - baseWidth * 0.08, baseY - Math.max(2, height * 0.05));
         ctx.bezierCurveTo(
-            rightCp1X,
-            rightCp1Y - Math.max(2, height * 0.02),
-            rightCp2X,
-            rightCp2Y - Math.max(2, height * 0.02),
-            tipX,
-            tipY
+            rightCp1X, rightCp1Y - Math.max(2, height * 0.03),
+            rightCp2X, rightCp2Y - Math.max(2, height * 0.03),
+            tipX, tipY
         );
         ctx.stroke();
 
         // brillo interior
         ctx.strokeStyle = colorHighlight;
-        ctx.lineWidth = Math.max(0.8, baseWidth * 0.03 * (0.95 + 0.25 * thicknessProgress));
+        ctx.lineWidth = Math.max(1.0, baseWidth * 0.035 * (0.9 + 0.3 * thicknessProgress));
         ctx.lineCap = 'round';
         ctx.beginPath();
-        const hiStartX = leftBaseX + baseWidth * 0.08;
-        const hiStartY = baseY - Math.max(1, height * 0.03);
-        const hiCp1X = leftCp1X + (halfBase * 0.05);
-        const hiCp1Y = leftCp1Y - Math.max(1, height * 0.03);
-        const hiCp2X = leftCp2X + (halfBase * 0.06);
-        const hiCp2Y = leftCp2Y - Math.max(2, height * 0.05);
+        const hiStartX = leftBaseX + baseWidth * 0.12;
+        const hiStartY = baseY - Math.max(1, height * 0.04);
+        const hiCp1X = leftCp1X + (halfBase * 0.08);
+        const hiCp1Y = leftCp1Y - Math.max(1, height * 0.04);
+        const hiCp2X = leftCp2X + (halfBase * 0.1);
+        const hiCp2Y = leftCp2Y - Math.max(2, height * 0.06);
         ctx.moveTo(hiStartX, hiStartY);
         ctx.bezierCurveTo(hiCp1X, hiCp1Y, hiCp2X, hiCp2Y, tipX, tipY);
         ctx.stroke();
 
-        // pelito en la punta (línea fina orientada a lo largo de la punta) - mantener sutil
-        const angleToBase = Math.atan2(baseY - tipY, tipX - centerX);
-        const tipHairLen = Math.min(20, Math.max(8, height * 0.12));
-        const hairStartX = tipX - Math.cos(angleToBase) * (tipHairLen * 0.28);
-        const hairStartY = tipY + Math.sin(angleToBase) * (tipHairLen * 0.28);
-
-        ctx.save();
-        ctx.strokeStyle = colorAccent;
-        ctx.lineWidth = Math.max(0.6, baseWidth * 0.02) * 1.1 * thicknessFactor;
-        ctx.lineCap = 'round';
-        ctx.shadowColor = colorHighlight;
-        ctx.shadowBlur = 3 * pe;
-        ctx.beginPath();
-        ctx.moveTo(hairStartX, hairStartY);
-        ctx.lineTo(tipX, tipY);
-        ctx.stroke();
-        ctx.restore();
-
-        // NOTA: sin remate en la punta (sin punto)
-
-        // pequeño rectángulo en la base para apoyar en el suelo (ajustado ligeramente por el grosor)
+        // base
         ctx.fillStyle = colorFill;
         ctx.beginPath();
-        ctx.rect(centerX - halfBase * 0.55, baseY - 3, halfBase * 1.1, 6);
+        ctx.rect(centerX - halfBase * 0.6, baseY - 4, halfBase * 1.2, 8);
         ctx.fill();
+
+        return { 
+            tipX, tipY, height, bend, 
+            leftBaseX, rightBaseX, baseY,
+            halfBase, currentHeight: height
+        };
     }
 
-    // Parámetros afinados: eliminar sacudida fuerte a la derecha (rightBend pequeño), curvatura izquierda más fuerte + gancho
-    function generateSingleBranch() {
+    // Rama delgada secundaria con taper (de gruesa a delgada)
+    function drawThinBranch(startX, startY, p, params) {
+        const {
+            length,
+            baseBend,
+            baseThickness,
+            color,
+            startProgress // <-- Usado para calcular el progreso relativo
+        } = params;
+
+        // Progress relativo al inicio de esta rama
+        // ESTA ES LA LÓGICA CLAVE
+        const relativeP = Math.max(0, (p - startProgress) / (1 - startProgress));
+        if (relativeP <= 0) return; // No dibujar si aún no es tiempo
+
+        const pe = easeOutCubic(relativeP);
+        const currentLength = length * pe;
+        
+        // Curva más orgánica para ramas delgadas
+        const bend = computeBendSecondary(pe, baseBend, baseThickness * 10);
+        
+        // Calcular posición final con curva
+        const angle = bend * 0.015;
+        const endX = startX + Math.sin(angle) * currentLength;
+        const endY = startY - Math.cos(angle) * currentLength;
+
+        // Taper:
+        const THICKNESS_MULTIPLIER = 5.0; // Grosor
+        const effectiveBaseThickness = baseThickness * THICKNESS_MULTIPLIER;
+        const hwStart = effectiveBaseThickness * 0.5;
+        const lengthFactor = params.length || length;
+        const taperRatio = Math.max(0.03, 0.45 - lengthFactor * 0.002);
+        const hwEnd = Math.max(0.6, hwStart * taperRatio);
+
+        // Puntos de control para curva suave
+        const cp1X = startX + Math.sin(angle * 0.4) * currentLength * 0.3;
+        const cp1Y = startY - Math.cos(angle * 0.4) * currentLength * 0.3;
+        const cp2X = startX + Math.sin(angle * 0.8) * currentLength * 0.7;
+        const cp2Y = startY - Math.cos(angle * 0.8) * currentLength * 0.7;
+
+        // Normal
+        const nx = Math.cos(angle);
+        const ny = Math.sin(angle);
+
+        // Construir forma rellena
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(startX + nx * hwStart, startY + ny * hwStart);
+        ctx.bezierCurveTo(
+            cp1X + nx * hwStart * 0.7, cp1Y + ny * hwStart * 0.4,
+            cp2X + nx * hwStart * 0.25, cp2Y + ny * hwStart * 0.12,
+            endX + nx * hwEnd, endY + ny * hwEnd
+        );
+        ctx.lineTo(endX - nx * hwEnd, endY - ny * hwEnd);
+        ctx.bezierCurveTo(
+            cp2X - nx * hwStart * 0.25, cp2Y - ny * hwStart * 0.12,
+            cp1X - nx * hwStart * 0.7, cp1Y - ny * hwStart * 0.4,
+            startX - nx * hwStart, startY - ny * hwStart
+        );
+        ctx.closePath();
+        ctx.fill();
+
+        // Punta redondeada
+        if (relativeP > 0.95) {
+            ctx.beginPath();
+            ctx.arc(endX, endY, Math.max(1, hwEnd * 1.2), 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        return { endX, endY };
+    }
+
+    // --- LÓGICA DE ANIMACIÓN RESTAURADA ---
+    function generateTree() {
         const W = container.clientWidth;
         const H = container.clientHeight;
         const centerX = W / 2;
         const groundY = H;
 
-        // Tuned parameters: remove strong right jolt (small rightBend), stronger left bend + hook
-        const params = {
-            // multiplicador aumentado para que la rama sea mucho más ancha en el canvas
-            baseWidth: Math.max(14, W * 0.06),
-            topHeight: Math.max(320, H * 0.9),
-            rightBend: 2,    // curva muy ligera a la derecha al inicio (pequeña, sin sacudida)
-            leftBend: -22,   // curva izquierda más fuerte al final
-            // endThicken mayor hace que la zona fina en la punta sea menos extrema
-            endThicken: 2.2,
+        // Parámetros rama principal
+        const mainParams = {
+            baseWidth: Math.max(16, W * 0.07),
+            topHeight: Math.max(350, H * 0.95),
+            rightBend: 1,
+            leftBend: -25,
+            endThicken: 2.5,
             colorFill: '#14b79b',
             colorAccent: '#14b79b',
             colorHighlight: '#14b79b'
         };
 
-        const secondsDuration = 2.2;
-        let start = null;
+        // Array de ramas delgadas (con startProgress y heightProgress sincronizados)
+        const thinBranches = [
+            // Izquierda
+            { length: Math.round(150 * 1.75), baseBend: -45, baseThickness: 3.5 * 1.5, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'left', xOffset: -30 },
+            { length: Math.round(125 * 1.75), baseBend: -35, baseThickness: 3.0 * 1.5, color: '#14b79b', startProgress: 0.30, heightProgress: 0.30, side: 'left', xOffset: -25 },
+            // Derecha
+            { length: Math.round(140 * 1.75), baseBend: 20, baseThickness: 3.2 * 1.5, color: '#14b79b', startProgress: 0.25, heightProgress: 0.25, side: 'right', xOffset: 12 },
+            { length: Math.round(110 * 1.75), baseBend: 80, baseThickness: 2.8 * 1.5, color: '#14b79b', startProgress: 0.45, heightProgress: 0.45, side: 'right', xOffset: 18 }
+        ];
 
+        // Estado de anclaje
+        const thinState = thinBranches.map(() => ({ started: false, startX: null, startY: null }));
+
+        // Variables de animación ÚNICAS
+        const secondsDuration = 3.0; // Duración total de toda la animación
+        let start = null;
+        let mainBranchData = null;
+
+        // Función de animación ÚNICA
         function step(ts) {
             if (!start) start = ts;
             const elapsed = (ts - start) / 1000;
-            let rawP = Math.min(1, elapsed / secondsDuration);
+            let rawP = Math.min(1, elapsed / secondsDuration); // Progreso global
             const easedP = easeOutCubic(rawP);
 
+            // 1. Limpiar y dibujar suelo
             ctx.clearRect(0, 0, W, H);
             drawGround(W, groundY);
-            drawSingleBranch(centerX, groundY, easedP, params);
+            
+            // 2. Dibujar tallo principal animado
+            mainBranchData = drawMainBranch(centerX, groundY, easedP, mainParams);
 
+            // 3. Dibujar ramas delgadas (lógica concurrente)
+            for (let i = 0; i < thinBranches.length; i++) {
+                const branch = thinBranches[i];
+                const state = thinState[i];
+
+                // Comprobar si la animación global ha alcanzado el punto de inicio de esta rama
+                if (rawP >= branch.startProgress) {
+                    
+                    if (!state.started) {
+                        // Es la primera vez: Calcular y FIJAR el punto de anclaje
+                        const startPoint = getPointOnMainBranch(
+                            centerX,
+                            groundY,
+                            branch.heightProgress, // Usar la altura de anclaje
+                            branch.side,
+                            mainParams,
+                            mainBranchData.bend,
+                            mainBranchData.currentHeight
+                        );
+                        
+                        const xOff = branch.xOffset || 0;
+                        state.startX = startPoint.x + (startPoint.tx * xOff);
+                        state.startY = startPoint.y + (startPoint.ty * xOff);
+                        state.started = true;
+                    }
+                    
+                    // Dibujar la rama. Pasa el progreso GLOBAL.
+                    // drawThinBranch calculará el progreso relativo internamente
+                    drawThinBranch(state.startX, state.startY, rawP, branch);
+                }
+            }
+
+            // 4. Continuar bucle si no ha terminado
             if (rawP < 1) {
                 requestAnimationFrame(step);
             } else {
+                // Dibujo final para asegurar estado perfecto
                 ctx.clearRect(0, 0, W, H);
                 drawGround(W, groundY);
-                drawSingleBranch(centerX, groundY, 1, params);
+                mainBranchData = drawMainBranch(centerX, groundY, 1, mainParams);
+                for (let i = 0; i < thinBranches.length; i++) {
+                    const branch = thinBranches[i];
+                    const state = thinState[i];
+                    if (!state.started) { // Por si acaso la animación fue muy rápida
+                        const startPoint = getPointOnMainBranch(centerX, groundY, branch.heightProgress, branch.side, mainParams, mainBranchData.bend, mainBranchData.currentHeight);
+                        const xOff = branch.xOffset || 0;
+                        state.startX = startPoint.x + (startPoint.tx * xOff);
+                        state.startY = startPoint.y + (startPoint.ty * xOff);
+                    }
+                    drawThinBranch(state.startX, state.startY, 1, branch);
+                }
             }
         }
 
+        // Iniciar la animación
         requestAnimationFrame(step);
     }
 });
